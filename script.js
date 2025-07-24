@@ -1,12 +1,33 @@
 // Get the canvas element and its context
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d', { willReadFrequently: false });
+let canvas, ctx;
 
-// Pre-calculate canvas dimensions (mathematical optimization)
-const canvasWidth = canvas.width;
-const canvasHeight = canvas.height;
-const halfWidth = canvasWidth / 2;
-const halfHeight = canvasHeight / 2;
+function initializeCanvas() {
+    canvas = document.getElementById('gameCanvas');
+    if (!canvas) {
+        console.error('Canvas element not found!');
+        return false;
+    }
+    
+    ctx = canvas.getContext('2d', { willReadFrequently: false });
+    if (!ctx) {
+        console.error('Could not get canvas context!');
+        return false;
+    }
+    
+    console.log('Canvas initialized successfully');
+    return true;
+}
+
+// Canvas dimensions (will be set after initialization)
+let canvasWidth, canvasHeight, halfWidth, halfHeight;
+
+function setCanvasDimensions() {
+    canvasWidth = canvas.width;
+    canvasHeight = canvas.height;
+    halfWidth = canvasWidth / 2;
+    halfHeight = canvasHeight / 2;
+    console.log('Canvas dimensions set:', canvasWidth, 'x', canvasHeight);
+}
 
 
 // Base Sprite class (optimized for performance)
@@ -20,7 +41,7 @@ class Sprite {
         this.dy = dy;
         this.radius = radius;
         this.color = color;
-        this.speed = speed || Sprite.speed;
+        this.speed = speed || 2; // Default speed if not provided
         this.isMoving = isMoving;
         this.isCollectable = isCollectable;
         
@@ -30,11 +51,9 @@ class Sprite {
 
     // Optimized draw method (minimize draw operations)
     draw(ctx) {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        // Draw square sprite
         ctx.fillStyle = this.color;
-        ctx.fill();
-        ctx.closePath();
+        ctx.fillRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
     }
 
     // Optimized update method (efficient mathematical expressions)
@@ -70,34 +89,16 @@ class Coin extends Sprite {
         this.glowRadius = radius * 1.1;
     }
     
-    // Override draw method for coins (visual effects)
+    // Override draw method for coins (gold square)
     draw(ctx) {
-        // Draw glow effect
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.glowRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-        ctx.fill();
-        ctx.closePath();
-        
-        // Draw main coin with rotation
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.rotationAngle);
-        
-        ctx.beginPath();
-        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        // Draw gold square
         ctx.fillStyle = this.color;
-        ctx.fill();
-        ctx.closePath();
+        ctx.fillRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
         
-        // Draw coin symbol
-        ctx.fillStyle = '#b8860b';
-        ctx.font = `${this.radius * 0.6}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('$', 0, 0);
-        
-        ctx.restore();
+        // Draw border for better visibility
+        ctx.strokeStyle = '#b8860b';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
     }
     
     // Enhanced update method for coins
@@ -124,7 +125,7 @@ class Coin extends Sprite {
     }
 }
 
-// Platform class extending base Sprite (static/moving platforms)
+// Platform class extending base Sprite (moving platforms with wrapping)
 class Platform extends Sprite {
     static speed = 2;
     constructor(x, y, width, height, dx, dy, speed, isMoving, platformType) {
@@ -132,19 +133,16 @@ class Platform extends Sprite {
         
         this.width = width;
         this.height = height;
-        this.platformType = platformType || 'normal'; // normal, moving, breakable
-        this.originalX = x;
-        this.originalY = y;
-        this.moveDistance = 100; // How far the platform moves
-        this.moveDirection = 1;
+        this.platformType = platformType || 'moving';
         
         // Pre-calculate platform-specific values
         this.halfWidth = width / 2;
         this.halfHeight = height / 2;
     }
     
-    // Override draw method for platforms (rectangular shape)
+    // Override draw method for platforms (rectangle)
     draw(ctx) {
+        // Draw platform rectangle
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x - this.halfWidth, this.y - this.halfHeight, this.width, this.height);
         
@@ -152,33 +150,65 @@ class Platform extends Sprite {
         ctx.strokeStyle = '#654321';
         ctx.lineWidth = 2;
         ctx.strokeRect(this.x - this.halfWidth, this.y - this.halfHeight, this.width, this.height);
-        
-        // Draw platform type indicator
-        if (this.platformType === 'moving') {
-            ctx.fillStyle = '#4169E1';
-            ctx.fillRect(this.x - this.halfWidth + 5, this.y - this.halfHeight + 5, 10, 10);
-        }
     }
     
-    // Enhanced update method for platforms
-    update() {
-        if (this.isMoving && this.platformType === 'moving') {
-            // Move platform back and forth
-            this.x += this.dx * this.moveDirection;
+    // Enhanced update method for platforms with directional wrapping
+update() {
+    if (this.isMoving) {
+        // Move platform
+        this.x += this.dx;
+        this.y += this.dy;
+        
+        // Check boundaries and wrap to random position beyond canvas
+        if (this.x + this.halfWidth < 0 || this.x - this.halfWidth > canvasWidth ||
+            this.y + this.halfHeight < 0 || this.y - this.halfHeight > canvasHeight) {
             
-            // Change direction when reaching limits
-            if (this.x > this.originalX + this.moveDistance || this.x < this.originalX - this.moveDistance) {
-                this.moveDirection *= -1;
+            // Randomly choose which side to appear from
+            const side = Math.floor(Math.random() * 4); // 0: top, 1: right, 2: bottom, 3: left
+            
+            switch(side) {
+                case 0: // Top - beyond upper boundary (vertical movement)
+                    this.x = Math.random() * canvasWidth;
+                    this.y = -this.halfHeight - Math.random() * 100;
+                    this.dx = 0; // No horizontal movement
+                    this.dy = Math.random() * 2 + 1; // Move down at 1-3 speed
+                    break;
+                case 1: // Right - beyond right boundary (horizontal movement)
+                    this.x = canvasWidth + this.halfWidth + Math.random() * 100;
+                    this.y = Math.random() * canvasHeight;
+                    this.dx = -(Math.random() * 2 + 1); // Move left at 1-3 speed
+                    this.dy = 0; // No vertical movement
+                    break;
+                case 2: // Bottom - beyond lower boundary (vertical movement)
+                    this.x = Math.random() * canvasWidth;
+                    this.y = canvasHeight + this.halfHeight + Math.random() * 100;
+                    this.dx = 0; // No horizontal movement
+                    this.dy = -(Math.random() * 2 + 1); // Move up at 1-3 speed
+                    break;
+                case 3: // Left - beyond left boundary (horizontal movement)
+                    this.x = -this.halfWidth - Math.random() * 100;
+                    this.y = Math.random() * canvasHeight;
+                    this.dx = Math.random() * 2 + 1; // Move right at 1-3 speed
+                    this.dy = 0; // No vertical movement
+                    break;
             }
         }
     }
+}
     
     // Method to check if player is on platform
     isPlayerOnPlatform(player) {
+        // Check if player is above the platform and falling down
+        const playerBottom = player.y + player.radius;
+        const platformTop = this.y - this.halfHeight;
+        const playerTop = player.y - player.radius;
+        const platformBottom = this.y + this.halfHeight;
+        
         return player.x >= this.x - this.halfWidth &&
                player.x <= this.x + this.halfWidth &&
-               player.y + player.radius >= this.y - this.halfHeight &&
-               player.y + player.radius <= this.y + this.halfHeight;
+               playerBottom >= platformTop &&
+               playerTop <= platformBottom &&
+               player.dy >= 0; // Player is falling down
     }
 }
 
@@ -203,63 +233,52 @@ class Enemy extends Sprite {
         this.patrolDirection = 1;
     }
     
-    // Override draw method for enemies (visual distinction)
+    // Override draw method for enemies (red square)
     draw(ctx) {
-        // Draw danger indicator
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
-        ctx.strokeStyle = '#ff0000';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.closePath();
-        
-        // Draw main enemy
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        // Draw red square enemy
         ctx.fillStyle = this.color;
-        ctx.fill();
-        ctx.closePath();
+        ctx.fillRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
         
-        // Draw enemy eyes
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.closePath();
-        
-        ctx.beginPath();
-        ctx.arc(this.x + this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.closePath();
+        // Draw border for better visibility
+        ctx.strokeStyle = '#cc0000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
     }
     
-    // Enhanced update method for enemies
-    update() {
-        if (!this.isDead) {
-            super.update();
-            
-            // Enemy-specific behavior based on type
-            switch (this.enemyType) {
-                case 'patrol':
-                    this.patrolBehavior();
-                    break;
-                case 'flying':
-                    this.flyingBehavior();
-                    break;
-                default:
-                    this.basicBehavior();
-                    break;
-            }
-            
-            // Boundary checking
-            if (this.x >= maxX || this.x <= minX) {
-                this.dx = -this.dx;
-            }
-            if (this.y >= maxY || this.y <= minY) {
-                this.dy = -this.dy;
-            }
+    // Enhanced update method for enemies with boundary wrapping
+update() {
+    if (!this.isDead) {
+        super.update();
+        
+        // Enemy-specific behavior based on type
+        switch (this.enemyType) {
+            case 'patrol':
+                this.patrolBehavior();
+                break;
+            case 'flying':
+                this.flyingBehavior();
+                break;
+            default:
+                this.basicBehavior();
+                break;
+        }
+        
+        // Boundary wrapping - enemies appear on opposite side
+        if (this.x + this.radius < 0) {
+            // Wrap from left to right
+            this.x = canvasWidth + this.radius;
+        } else if (this.x - this.radius > canvasWidth) {
+            // Wrap from right to left
+            this.x = -this.radius;
+        }
+        
+        // Keep ground enemies on ground level
+        if (this.enemyType === 'patrol' && this.y + this.radius >= playerObject.groundY) {
+            this.y = playerObject.groundY - this.radius;
+            this.dy = 0;
         }
     }
+}
     
         
     
@@ -358,8 +377,56 @@ function createPlatform(x, y, width, height, dx, dy, speed, isMoving, platformTy
     return platform;
 }
 
+// Function to spawn new enemies
+function spawnNewEnemy() {
+    enemySpawnCount++;
+    const isFlying = Math.random() < 0.5; // 50% chance for flying enemy
+    
+    if (isFlying) {
+        // Spawn flying enemy at random height
+        const spawnX = Math.random() < 0.5 ? -20 : canvasWidth + 20; // Left or right side
+        const spawnY = Math.random() * (canvasHeight - 200) + 100; // Random height
+        const direction = spawnX < 0 ? 1 : -1; // Move towards center
+        
+        createEnemy(
+            spawnX, spawnY, 
+            direction * (1 + enemySpeedMultiplier), 0, 
+            12, '#ff0000', 
+            1 + enemySpeedMultiplier, true, 'flying'
+        );
+        console.log('New flying enemy spawned!');
+    } else {
+        // Spawn ground enemy
+        const spawnX = Math.random() < 0.5 ? -20 : canvasWidth + 20; // Left or right side
+        const direction = spawnX < 0 ? 1 : -1; // Move towards center
+        
+        createEnemy(
+            spawnX, playerObject.groundY - 12, 
+            direction * (1 + enemySpeedMultiplier), 0, 
+            15, '#ff0000', 
+            1 + enemySpeedMultiplier, true, 'patrol'
+        );
+        console.log('New ground enemy spawned!');
+    }
+}
+
+// Function to spawn new coin at random position
+function spawnNewCoin() {
+    const coinRadius = Math.random() * 5 + 8; // Random size between 8-13
+    const spawnX = Math.random() * (canvasWidth - coinRadius * 2) + coinRadius;
+    const spawnY = Math.random() * (canvasHeight - coinRadius * 2) + coinRadius;
+    
+    createCoin(spawnX, spawnY, 0, 0, coinRadius, '#ffd700', 0, false);
+    console.log('New coin spawned at:', spawnX, spawnY);
+}
+
 // Optimized sprite rendering function (batch operations)
 function renderAllSprites() {
+    if (!ctx) {
+        console.error('Canvas context not available for rendering!');
+        return;
+    }
+    
     // Render platforms first (background)
     for (let i = 0; i < arrWithPlatforms.length; i++) {
         const platform = arrWithPlatforms[i];
@@ -406,6 +473,33 @@ function updateAllSprites() {
                 // Remove collected coin (optimized array removal)
                 arrWithCoins.splice(i, 1);
                 i--; // Adjust index after removal
+                
+                // Track total coins collected
+                totalCoinsCollected++;
+                
+                // Increase enemy speed every 5 coins
+                if (totalCoinsCollected % 5 === 0) {
+                    enemySpeedMultiplier += 0.2;
+                    console.log('Enemy speed increased! Multiplier:', enemySpeedMultiplier);
+                    
+                    // Apply speed increase to all existing enemies
+                    for (let j = 0; j < arrWithEnemies.length; j++) {
+                        const enemy = arrWithEnemies[j];
+                        if (enemy.enemyType === 'patrol') {
+                            enemy.dx = (enemy.dx > 0 ? 1 : -1) * (1 + enemySpeedMultiplier);
+                        } else if (enemy.enemyType === 'flying') {
+                            enemy.dx = (enemy.dx > 0 ? 1 : -1) * (1 + enemySpeedMultiplier);
+                        }
+                    }
+                }
+                
+                // Spawn new enemy every 5 coins (starting from 5)
+                if (totalCoinsCollected % 5 === 0 && totalCoinsCollected > 0) {
+                    spawnNewEnemy();
+                }
+                
+                // Spawn new coin immediately
+                spawnNewCoin();
             }
         }
     }
@@ -422,30 +516,44 @@ function updateAllSprites() {
 }
 
 // Animation variables with pre-calculated values
-let animationId;
+let animationId = null;
 
-let playerObject = {
-    x: halfWidth,
-    y: halfHeight,
-    dx: 2,
-    dy: 2,
-    radius: 20,
-    color: '#4CAF50',
-    speed: 2,
-    isMoving: false,
-    isJumping: false,
-    isFalling: false,
-    isDead: false,
-    amountOfCoins: 0,
+// Enemy management variables
+let enemySpeedMultiplier = 1;
+let totalCoinsCollected = 0;
+let enemySpawnCount = 0;
+
+let playerObject;
+
+function initializePlayer() {
+    playerObject = {
+        x: halfWidth,
+        y: canvasHeight - playerRadius, // Start at bottom boundary
+        dx: 0,
+        dy: 0,
+        radius: 20,
+        color: '#4CAF50',
+        speed: 2,
+        isMoving: false,
+        isDead: false,
+        amountOfCoins: 0,
+        onGround: true,
+        gravity: 0.6,
+        jumpPower: -15,
+        moveSpeed: 4,
+        groundY: canvasHeight - playerRadius
+    };
+    console.log('Player initialized at:', playerObject.x, playerObject.y);
 }
 
 
 
 // Pre-calculate boundary conditions (mathematical optimization)
-const maxX = canvasWidth - ballRadius;
-const minX = ballRadius;
-const maxY = canvasHeight - ballRadius;
-const minY = ballRadius;
+const playerRadius = 20; // Match playerObject.radius
+const maxX = canvasWidth - playerRadius;
+const minX = playerRadius;
+const maxY = canvasHeight - playerRadius;
+const minY = playerRadius;
 
 // Colors (batch similar operations)
 const ballColor = '#4CAF50';
@@ -459,40 +567,121 @@ const arrowSpeed = 3;
 
 // Initialize the canvas (batch operations)
 function init() {
+    console.log('Initializing game...');
+    
+    // Initialize canvas and dimensions
+    if (!initializeCanvas()) {
+        console.error('Failed to initialize canvas!');
+        return false;
+    }
+    
+    setCanvasDimensions();
+    initializePlayer();
+    
     // Single clear operation instead of multiple
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     
     // Draw the ball
     drawBall();
+    
+    console.log('Game initialized successfully');
+    return true;
 }
 
-// Optimized ball drawing (minimize draw operations)
+// Optimized player drawing (green square)
 function drawBall() {
-    ctx.beginPath();
-    ctx.arc(playerObject.x, playerObject.y, playerObject.radius, 0, Math.PI * 2);
+    // Draw green square player
     ctx.fillStyle = ballColor;
-    ctx.fill();
-    ctx.closePath();
+    ctx.fillRect(playerObject.x - playerObject.radius, playerObject.y - playerObject.radius, playerObject.radius * 2, playerObject.radius * 2);
+    
+    // Draw border for better visibility
+    ctx.strokeStyle = '#2d5a2d';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(playerObject.x - playerObject.radius, playerObject.y - playerObject.radius, playerObject.radius * 2, playerObject.radius * 2);
 }
 
-// Optimized position update (efficient mathematical expressions)
+// Draw coin counter in top right corner
+function drawCoinCounter() {
+    const counterX = canvasWidth - 150;
+    const counterY = 30;
+    const coinSize = 20;
+    
+    // Draw background for counter
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(counterX - 10, counterY - 10, 140, 40);
+    
+    // Draw coin icon
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(counterX, counterY, coinSize, coinSize);
+    ctx.strokeStyle = '#b8860b';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(counterX, counterY, coinSize, coinSize);
+    
+    // Draw "x" symbol
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('x', counterX + coinSize + 10, counterY + coinSize/2);
+    
+    // Draw coin count
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(playerObject.amountOfCoins.toString(), counterX + coinSize + 25, counterY + coinSize/2);
+}
+
+// Mario-style physics update
 function update() {
-    // Simplified boundary checking with pre-calculated values
-    if (playerObject.x >= maxX || playerObject.x <= minX) {
-        playerObject.dx = -playerObject.dx;
-    }
-    if (playerObject.y >= maxY || playerObject.y <= minY) {
-        playerObject.dy = -playerObject.dy;
+    // Apply gravity
+    if (!playerObject.onGround) {
+        playerObject.dy += playerObject.gravity;
     }
     
-    // Direct position update
+    // Update position
     playerObject.x += playerObject.dx;
     playerObject.y += playerObject.dy;
+    
+    // Check platform collisions
+    playerObject.onGround = false;
+    for (let i = 0; i < arrWithPlatforms.length; i++) {
+        const platform = arrWithPlatforms[i];
+        if (platform.isPlayerOnPlatform(playerObject)) {
+            // Player is on platform
+            playerObject.onGround = true;
+            playerObject.y = platform.y - platform.halfHeight - playerObject.radius;
+            playerObject.dy = 0;
+            break;
+        }
+    }
+    
+    // Check ground collision
+    if (playerObject.y + playerObject.radius >= playerObject.groundY) {
+        playerObject.onGround = true;
+        playerObject.y = playerObject.groundY - playerObject.radius;
+        playerObject.dy = 0;
+    }
+    
+    // Horizontal boundary checking
+    if (playerObject.x >= maxX) {
+        playerObject.x = maxX;
+        playerObject.dx = 0;
+    }
+    if (playerObject.x <= minX) {
+        playerObject.x = minX;
+        playerObject.dx = 0;
+    }
 }
 
 // Main animation loop (optimized rendering)
 function animate() {
+    if (!ctx || !canvas) {
+        console.error('Canvas not available for animation!');
+        return;
+    }
+    
     // Single clear operation for the entire canvas
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -505,59 +694,79 @@ function animate() {
     updateAllSprites();
     renderAllSprites();
     
+    // Draw UI elements
+    drawCoinCounter();
+    
     // Continue animation
     animationId = requestAnimationFrame(animate);
 }
 
 // Start the animation when the page loads
 window.addEventListener('load', () => {
-    init();
+    console.log('Page loaded, initializing...');
     
-    // Create some example sprites (batch initialization)
-    createEnemy(100, 100, 1, 1, 15, '#ff4444', 1, true, 'patrol');
-    createEnemy(200, 200, -1, 1, 12, '#ff6666', 1.5, true, 'flying');
-    createCoin(300, 300, 0, 0, 10, '#ffdd00', 0, false); // Gold coin
-    createCoin(400, 150, 0, 0, 8, '#ffdd00', 0, false);  // Gold coin
-    createPlatform(400, 500, 200, 20, 1, 0, 1, true, 'moving'); // Moving platform
-    createPlatform(100, 450, 150, 20, 0, 0, 0, false, 'normal'); // Static platform
+    if (!init()) {
+        console.error('Failed to initialize game!');
+        return;
+    }
     
+    // Create 5 moving platforms in a stack
+    // Create initial enemies and coins
+    console.log('Creating sprites...');
+    
+    // Create 3 ground enemies
+    createEnemy(100, playerObject.groundY - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(300, playerObject.groundY - 15, -1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(500, playerObject.groundY - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    
+    // Create 2 flying enemies
+    createEnemy(200, 150, -1, 0, 12, '#ff0000', 1, true, 'flying');
+    createEnemy(400, 200, 1, 0, 12, '#ff0000', 1, true, 'flying');
+    
+    // Create coins
+    createCoin(300, 300, 0, 0, 10, '#ffd700', 0, false); // Gold coin
+    createCoin(400, 150, 0, 0, 8, '#ffd700', 0, false);  // Gold coin
+    
+    // Create 5 platforms in a stack that move and wrap
+    createPlatform(100, 500, 150, 20, 2, 0, 1, true, 'moving'); // Platform 1 - starts moving right
+    createPlatform(300, 450, 150, 20, -1.5, 0, 1, true, 'moving'); // Platform 2 - starts moving left
+    createPlatform(500, 400, 150, 20, 0, -1, 1, true, 'moving'); // Platform 3 - starts moving up
+    createPlatform(200, 350, 150, 20, 1, 0, 1, true, 'moving'); // Platform 4 - starts moving right
+    createPlatform(400, 300, 150, 20, -1, 0, 1, true, 'moving'); // Platform 5 - starts moving left
+    
+    console.log('Starting animation...');
     animate();
 });
 
 // Optimized click event (efficient position calculation)
-canvas.addEventListener('click', (event) => {
-    const rect = canvas.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    const clickY = event.clientY - rect.top;
-    
-    // Simplified direction calculation
-    playerObject.dx = (clickX - playerObject.x) * clickMultiplier;
-    playerObject.dy = (clickY - playerObject.y) * clickMultiplier;
-});
 
-// Optimized keyboard controls (batch similar operations)
+
+// Mario-style keyboard controls
 document.addEventListener('keydown', (event) => {
     switch(event.key) {
         case 'ArrowUp':
-            playerObject.dy = -arrowSpeed;
-            break;
-        case 'ArrowDown':
-            playerObject.dy = arrowSpeed;
+        case ' ':
+            // Jump only when on ground
+            if (playerObject.onGround) {
+                playerObject.dy = playerObject.jumpPower;
+                playerObject.onGround = false;
+            }
             break;
         case 'ArrowLeft':
-            playerObject.dx = -arrowSpeed;
+            playerObject.dx = -playerObject.moveSpeed;
             break;
         case 'ArrowRight':
-            playerObject.dx = arrowSpeed;
+            playerObject.dx = playerObject.moveSpeed;
             break;
-        case ' ':
-            // Efficient pause/resume logic
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-                animationId = null;
-            } else {
-                animate();
-            }
+    }
+});
+
+// Stop horizontal movement when keys are released
+document.addEventListener('keyup', (event) => {
+    switch(event.key) {
+        case 'ArrowLeft':
+        case 'ArrowRight':
+            playerObject.dx = 0;
             break;
     }
 });
