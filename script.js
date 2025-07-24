@@ -158,12 +158,33 @@ class Coin extends Sprite {
         }
     }
 
-    // Method to handle collection
+    // Method to handle collection - updated for sprite-based collision
     collect(player) {
-        if (!this.collected && this.checkCollision(player)) {
-            this.collected = true;
-            player.amountOfCoins += this.coinValue;
-            return true; // Collection occurred
+        if (!this.collected) {
+            // Use sprite-based collision detection (rectangular bounds)
+            const coinWidth = this.frameWidth || this.radius * 2;
+            const coinHeight = this.frameHeight || this.radius * 2;
+            const playerWidth = 64; // knightFrameWidth * scale
+            const playerHeight = 80; // knightFrameHeight * scale
+            
+            const coinLeft = this.x - coinWidth / 2;
+            const coinRight = this.x + coinWidth / 2;
+            const coinTop = this.y - coinHeight / 2;
+            const coinBottom = this.y + coinHeight / 2;
+            
+            const playerLeft = player.x - playerWidth / 2;
+            const playerRight = player.x + playerWidth / 2;
+            const playerTop = player.y - playerHeight / 2;
+            const playerBottom = player.y + playerHeight / 2;
+            
+            // Check rectangular collision
+            if (coinLeft < playerRight && coinRight > playerLeft &&
+                coinTop < playerBottom && coinBottom > playerTop) {
+                this.collected = true;
+                player.totalCoinsCollected += this.coinValue;
+                player.amountOfCoins += this.coinValue;
+                return true; // Collection occurred
+            }
         }
         return false;
     }
@@ -272,19 +293,33 @@ class Platform extends Sprite {
         }
     }
 
-    // Method to check if player is on platform
+        // Method to check if player is on platform - updated for sprite-based collision
     isPlayerOnPlatform(player) {
+        // Use sprite-based dimensions
+        const playerWidth = 64; // knightFrameWidth * scale
+        const playerHeight = 80; // knightFrameHeight * scale
+        
         // Check if player is above the platform and falling down
-        const playerBottom = player.y + player.radius;
+        const playerLeft = player.x - playerWidth / 2;
+        const playerRight = player.x + playerWidth / 2;
+        const playerBottom = player.y + playerHeight / 2;
+        const playerTop = player.y - playerHeight / 2;
+        
+        const platformLeft = this.x - this.halfWidth;
+        const platformRight = this.x + this.halfWidth;
         const platformTop = this.y - this.halfHeight;
-        const playerTop = player.y - player.radius;
         const platformBottom = this.y + this.halfHeight;
 
-        return player.x >= this.x - this.halfWidth &&
-            player.x <= this.x + this.halfWidth &&
-            playerBottom >= platformTop &&
-            playerTop <= platformBottom &&
-            player.dy >= 0; // Player is falling down
+        // Player must be entirely over the platform (not just touching)
+        const isEntirelyOver = playerLeft >= platformLeft && 
+                              playerRight <= platformRight;
+        
+        // Player must be landing on top of platform
+        const isLandingOnTop = playerBottom >= platformTop &&
+                              playerTop <= platformBottom &&
+                              player.dy >= 0; // Player is falling down
+
+        return isEntirelyOver && isLandingOnTop;
     }
 }
 
@@ -355,8 +390,8 @@ class Enemy extends Sprite {
                 const isMovingLeft = this.dx < 0;
                 
                 if (isMovingLeft) {
-                    // Flip horizontally for left movement
-                    ctx.translate(this.x + (this.monsterFrameWidth * scale) / 2, this.y);
+                    // Flip horizontally for left movement - stay on central axis
+                    ctx.translate(this.x, this.y);
                     ctx.scale(-1, 1);
                     ctx.translate(-(this.monsterFrameWidth * scale) / 2, -(this.monsterFrameHeight * scale) / 2);
                     
@@ -454,27 +489,56 @@ update() {
         // Simple movement
     }
 
-    // Method to handle collision with player
+    // Method to handle collision with player - updated for sprite-based collision
     handlePlayerCollision(player) {
-        if (!this.isDead && this.checkCollision(player) && !player.isInvincible) {
-            // Check if player has enough coins
-            if (player.amountOfCoins >= 5) {
-                // Subtract 5 coins and continue
-                player.amountOfCoins -= 5;
-                totalCoinsCollected -= 5;
-                player.isInvincible = true;
-                setTimeout(() => {
-                    player.isInvincible = false;
-                }, 1000);
-                
-                console.log('Player hit! Lost 5 coins. Remaining coins:', player.amountOfCoins);
-                return true; // Collision occurred but game continues
-            } else if (player.amountOfCoins < 5) {
-                // Game over only if player has less than 5 coins
-                gameOver = true;
-                gameOverScreen = true;
-                console.log('Game Over! Final coins collected:', totalCoinsCollected);
-                return true; // Collision occurred and game ends
+        if (!this.isDead && !player.isInvincible) {
+            // Use sprite-based collision detection with shrunk collision box
+            const scale = 1.5; // Must match the scale used in draw method
+            const shrinkFactor = 0.1; // Shrink collision box to 70% of sprite size
+            const enemyWidth = (this.monsterFrameWidth * scale) * shrinkFactor;
+            const enemyHeight = (this.monsterFrameHeight * scale) * shrinkFactor;
+            const playerWidth = 64; // knightFrameWidth * scale
+            const playerHeight = 80; // knightFrameHeight * scale
+            
+            // Calculate enemy bounds with shrunk collision box
+            const enemyLeft = this.x - enemyWidth / 2;
+            const enemyRight = this.x + enemyWidth / 2;
+            const enemyTop = this.y - enemyHeight / 2;
+            const enemyBottom = this.y + enemyHeight / 2;
+            
+            const playerLeft = player.x - playerWidth / 2;
+            const playerRight = player.x + playerWidth / 2;
+            const playerTop = player.y - playerHeight / 2;
+            const playerBottom = player.y + playerHeight / 2;
+            
+            // Check rectangular collision
+            const isColliding = enemyLeft < playerRight && enemyRight > playerLeft &&
+                              enemyTop < playerBottom && enemyBottom > playerTop;
+            
+            // Debug: Draw collision box (uncomment to see collision area)
+            
+           
+            
+            if (isColliding) {
+                // Check if player has enough coins
+                if (player.amountOfCoins >= 5) {
+                    // Subtract 5 coins and continue
+                    player.amountOfCoins -= 5;
+                    totalCoinsCollected -= 5;
+                    player.isInvincible = true;
+                    setTimeout(() => {
+                        player.isInvincible = false;
+                    }, 1000);
+                    
+                    console.log('Player hit! Lost 5 coins. Remaining coins:', player.amountOfCoins);
+                    return true; // Collision occurred but game continues
+                } else if (player.amountOfCoins < 5) {
+                    // Game over only if player has less than 5 coins
+                    gameOver = true;
+                    gameOverScreen = true;
+                    console.log('Game Over! Final coins collected:', totalCoinsCollected);
+                    return true; // Collision occurred and game ends
+                }
             }
         }
         return false;
@@ -679,10 +743,10 @@ function restartGame() {
     // Recreate initial sprites
     console.log('Recreating sprites...');
     
-    // Create 3 ground enemies
-    createEnemy(100, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
-    createEnemy(300, canvasHeight - 50, -1, 0, 15, '#ff0000', 1, true, 'patrol');
-    createEnemy(500, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    // Create 3 ground enemies starting at edges
+    createEnemy(50, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(canvasWidth - 50, canvasHeight - 50, -1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(25, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
     
     // Create 2 flying enemies
     createEnemy(200, 150, -1, 0, 12, '#ff0000', 1, true, 'flying');
@@ -836,7 +900,8 @@ function initializePlayer() {
         jumpPower: -15,
         moveSpeed: 4,
         groundY: canvasHeight - playerRadius,
-        facingDirection: 1 // 1 = right, -1 = left
+        facingDirection: 1,
+        totalCoinsCollected: 0 // 1 = right, -1 = left
     };
     console.log('Player initialized at:', playerObject.x, playerObject.y);
 }
@@ -898,8 +963,8 @@ function drawPlayer() {
             const isFacingLeft = playerObject.facingDirection < 0;
             
             if (isFacingLeft) {
-                // Flip horizontally for left facing
-                ctx.translate(playerObject.x + (knightFrameWidth * scale) / 2, playerObject.y);
+                // Flip horizontally for left facing - stay on central axis
+                ctx.translate(playerObject.x, playerObject.y);
                 ctx.scale(-1, 1);
                 ctx.translate(-(knightFrameWidth * scale) / 2, -(knightFrameHeight * scale) / 2);
                 
@@ -1099,10 +1164,10 @@ window.addEventListener('load', () => {
         // Create initial enemies and coins
     console.log('Creating sprites...');
     
-    // Create 3 ground enemies
-    createEnemy(100, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
-    createEnemy(300, canvasHeight - 50, -1, 0, 15, '#ff0000', 1, true, 'patrol');
-    createEnemy(500, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    // Create 3 ground enemies starting at edges
+    createEnemy(50, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(canvasWidth - 50, canvasHeight - 50, -1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(25, canvasHeight - 50, 1, 0, 15, '#ff0000', 1, true, 'patrol');
     
     // Create 2 flying enemies
     createEnemy(200, 150, -1, 0, 12, '#ff0000', 1, true, 'flying');
