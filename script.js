@@ -10,7 +10,7 @@ const halfHeight = canvasHeight / 2;
 
 
 class Sprite {
-    constructor(x, y, dx, dy, radius, color, speed, isMoving, isDead,isDangerous) {
+    constructor(x, y, dx, dy, radius, color, speed, isMoving, isDead,isDangerous,isCollectable) {
         this.x = x;
         this.y = y;
         this.dx = dx;
@@ -23,6 +23,7 @@ class Sprite {
         this.isFalling = isFalling;
         this.isDead = isDead;
         this.isDangerous = isDangerous;
+        this.isCollectable = isCollectable;
     }
 
     draw(ctx) {
@@ -40,6 +41,9 @@ class Sprite {
     
 }
 
+let arrWithDangerousSprites=[];
+let arrWithHelperSprites=[];
+
 // Animation variables with pre-calculated values
 
 
@@ -55,6 +59,7 @@ let playerObject = {
     isJumping: false,
     isFalling: false,
     isDead: false,
+    amountOfCoins: 0,
 }
 
 
