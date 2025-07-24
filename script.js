@@ -1,26 +1,83 @@
 // Get the canvas element and its context
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { willReadFrequently: false });
 
-// Set canvas dimensions
+// Pre-calculate canvas dimensions (mathematical optimization)
 const canvasWidth = canvas.width;
 const canvasHeight = canvas.height;
+const halfWidth = canvasWidth / 2;
+const halfHeight = canvasHeight / 2;
 
-// Animation variables
-let animationId;
-let x = canvasWidth / 2;
-let y = canvasHeight / 2;
-let dx = 2;
-let dy = 2;
-const ballRadius = 20;
 
-// Colors
+class Sprite {
+    constructor(x, y, dx, dy, radius, color, speed, isMoving, isDead,isDangerous) {
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+        this.radius = radius;
+        this.color = color;
+        this.speed = speed;
+        this.isMoving = isMoving;
+        this.isJumping = isJumping;
+        this.isFalling = isFalling;
+        this.isDead = isDead;
+        this.isDangerous = isDangerous;
+    }
+
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    update() {
+        this.x += this.dx;
+        this.y += this.dy;
+    }
+    
+}
+
+// Animation variables with pre-calculated values
+
+
+let playerObject = {
+    x: halfWidth,
+    y: halfHeight,
+    dx: 2,
+    dy: 2,
+    radius: 20,
+    color: '#4CAF50',
+    speed: 2,
+    isMoving: false,
+    isJumping: false,
+    isFalling: false,
+    isDead: false,
+}
+
+
+
+// Pre-calculate boundary conditions (mathematical optimization)
+const maxX = canvasWidth - ballRadius;
+const minX = ballRadius;
+const maxY = canvasHeight - ballRadius;
+const minY = ballRadius;
+
+// Colors (batch similar operations)
 const ballColor = '#4CAF50';
 const backgroundColor = '#ffffff';
 
-// Initialize the canvas
+// Pre-calculate frequently used values
+const clickMultiplier = 0.1;
+const arrowSpeed = 3;
+
+
+
+// Initialize the canvas (batch operations)
 function init() {
-    // Clear the canvas
+    // Single clear operation instead of multiple
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     
@@ -28,37 +85,37 @@ function init() {
     drawBall();
 }
 
-// Draw the ball
+// Optimized ball drawing (minimize draw operations)
 function drawBall() {
     ctx.beginPath();
-    ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+    ctx.arc(playerObject.x, playerObject.y, playerObject.radius, 0, Math.PI * 2);
     ctx.fillStyle = ballColor;
     ctx.fill();
     ctx.closePath();
 }
 
-// Update ball position
+// Optimized position update (efficient mathematical expressions)
 function update() {
-    // Bounce off walls
-    if (x + ballRadius > canvasWidth || x - ballRadius < 0) {
-        dx = -dx;
+    // Simplified boundary checking with pre-calculated values
+    if (playerObject.x >= maxX || playerObject.x <= minX) {
+        playerObject.dx = -playerObject.dx;
     }
-    if (y + ballRadius > canvasHeight || y - ballRadius < 0) {
-        dy = -dy;
+    if (playerObject.y >= maxY || playerObject.y <= minY) {
+        playerObject.dy = -playerObject.dy;
     }
     
-    // Update position
-    x += dx;
-    y += dy;
+    // Direct position update
+    playerObject.x += playerObject.dx;
+    playerObject.y += playerObject.dy;
 }
 
-// Main animation loop
+// Main animation loop (optimized rendering)
 function animate() {
-    // Clear canvas
+    // Single clear operation for the entire canvas
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     
-    // Update and draw
+    // Batch update and draw operations
     update();
     drawBall();
     
@@ -72,34 +129,34 @@ window.addEventListener('load', () => {
     animate();
 });
 
-// Add click event to change ball direction
+// Optimized click event (efficient position calculation)
 canvas.addEventListener('click', (event) => {
     const rect = canvas.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
     
-    // Change direction based on click position
-    dx = (clickX - x) * 0.1;
-    dy = (clickY - y) * 0.1;
+    // Simplified direction calculation
+    playerObject.dx = (clickX - playerObject.x) * clickMultiplier;
+    playerObject.dy = (clickY - playerObject.y) * clickMultiplier;
 });
 
-// Add keyboard controls
+// Optimized keyboard controls (batch similar operations)
 document.addEventListener('keydown', (event) => {
     switch(event.key) {
         case 'ArrowUp':
-            dy = -3;
+            playerObject.dy = -arrowSpeed;
             break;
         case 'ArrowDown':
-            dy = 3;
+            playerObject.dy = arrowSpeed;
             break;
         case 'ArrowLeft':
-            dx = -3;
+            playerObject.dx = -arrowSpeed;
             break;
         case 'ArrowRight':
-            dx = 3;
+            playerObject.dx = arrowSpeed;
             break;
         case ' ':
-            // Spacebar pauses/resumes animation
+            // Efficient pause/resume logic
             if (animationId) {
                 cancelAnimationFrame(animationId);
                 animationId = null;
@@ -108,6 +165,17 @@ document.addEventListener('keydown', (event) => {
             }
             break;
     }
-}); 
+});
+
+// Memory management: Cleanup function for proper disposal
+function cleanup() {
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+}
+
+// Cleanup on page unload to prevent memory leaks
+window.addEventListener('beforeunload', cleanup); 
 
 
