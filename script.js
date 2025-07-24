@@ -20,6 +20,7 @@ function initializeCanvas() {
 
 // Canvas dimensions (will be set after initialization)
 let canvasWidth, canvasHeight, halfWidth, halfHeight;
+let bgImage = new Image();
 
 function setCanvasDimensions() {
     canvasWidth = canvas.width;
@@ -27,6 +28,17 @@ function setCanvasDimensions() {
     halfWidth = canvasWidth / 2;
     halfHeight = canvasHeight / 2;
     console.log('Canvas dimensions set:', canvasWidth, 'x', canvasHeight);
+}
+
+// Load background image
+function loadBackgroundImage() {
+    bgImage.onload = function() {
+        console.log('Background image loaded successfully');
+    };
+    bgImage.onerror = function() {
+        console.error('Failed to load background image');
+    };
+    bgImage.src = 'bgImageGame.png';
 }
 
 
@@ -273,8 +285,8 @@ update() {
         }
         
         // Keep ground enemies on ground level
-        if (this.enemyType === 'patrol' && this.y + this.radius >= playerObject.groundY) {
-            this.y = playerObject.groundY - this.radius;
+        if (this.enemyType === 'patrol' && this.y + this.radius >= canvasHeight - 15) {
+            this.y = canvasHeight - 15;
             this.dy = 0;
         }
     }
@@ -300,9 +312,26 @@ update() {
     
     // Method to handle collision with player
     handlePlayerCollision(player) {
-        if (!this.isDead && this.checkCollision(player)) {
-            player.isDead = true;
-            return true; // Collision occurred
+        if (!this.isDead && this.checkCollision(player) && !player.isInvincible) {
+            // Check if player has enough coins
+            if (player.amountOfCoins >= 5) {
+                // Subtract 5 coins and continue
+                player.amountOfCoins -= 5;
+                totalCoinsCollected -= 5;
+                player.isInvincible = true;
+                setTimeout(() => {
+                    player.isInvincible = false;
+                }, 1000);
+                
+                console.log('Player hit! Lost 5 coins. Remaining coins:', player.amountOfCoins);
+                return true; // Collision occurred but game continues
+            } else if (player.amountOfCoins < 5) {
+                // Game over only if player has less than 5 coins
+                gameOver = true;
+                gameOverScreen = true;
+                console.log('Game Over! Final coins collected:', totalCoinsCollected);
+                return true; // Collision occurred and game ends
+            }
         }
         return false;
     }
@@ -366,7 +395,7 @@ function spawnNewEnemy() {
         const direction = spawnX < 0 ? 1 : -1; // Move towards center
         
         createEnemy(
-            spawnX, playerObject.groundY - 12, 
+            spawnX, canvasHeight - 15, 
             direction * (1 + enemySpeedMultiplier), 0, 
             15, '#ff0000', 
             1 + enemySpeedMultiplier, true, 'patrol'
@@ -383,6 +412,59 @@ function spawnNewCoin() {
     
     createCoin(spawnX, spawnY, 0, 0, coinRadius, '#ffd700', 0, false);
     console.log('New coin spawned at:', spawnX, spawnY);
+}
+
+// Function to restart the game
+function restartGame() {
+    console.log('Restarting game...');
+    
+    // Reset game state
+    gameOver = false;
+    gameOverScreen = false;
+    
+    // Reset player
+    playerObject.x = halfWidth;
+    playerObject.y = canvasHeight - playerRadius;
+    playerObject.dx = 0;
+    playerObject.dy = 0;
+    playerObject.amountOfCoins = 0;
+    playerObject.onGround = true;
+    playerObject.groundY = canvasHeight - playerRadius;
+    
+    // Reset game variables
+    totalCoinsCollected = 0;
+    enemySpeedMultiplier = 1;
+    enemySpawnCount = 0;
+    
+    // Clear all sprites
+    arrWithEnemies.length = 0;
+    arrWithCoins.length = 0;
+    arrWithPlatforms.length = 0;
+    
+    // Recreate initial sprites
+    console.log('Recreating sprites...');
+    
+    // Create 3 ground enemies
+    createEnemy(100, canvasHeight - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(300, canvasHeight - 15, -1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(500, canvasHeight - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    
+    // Create 2 flying enemies
+    createEnemy(200, 150, -1, 0, 12, '#ff0000', 1, true, 'flying');
+    createEnemy(400, 200, 1, 0, 12, '#ff0000', 1, true, 'flying');
+    
+    // Create coins
+    createCoin(300, 300, 0, 0, 10, '#ffd700', 0, false);
+    createCoin(400, 150, 0, 0, 8, '#ffd700', 0, false);
+    
+    // Create 5 platforms in a stack that move and wrap
+    createPlatform(100, 500, 150, 20, 2, 0, 1, true, 'moving');
+    createPlatform(300, 450, 150, 20, -1.5, 0, 1, true, 'moving');
+    createPlatform(500, 400, 150, 20, 0, -1, 1, true, 'moving');
+    createPlatform(200, 350, 150, 20, 1, 0, 1, true, 'moving');
+    createPlatform(400, 300, 150, 20, -1, 0, 1, true, 'moving');
+    
+    console.log('Game restarted successfully!');
 }
 
 // Optimized sprite rendering function (batch operations)
@@ -488,12 +570,16 @@ let enemySpeedMultiplier = 1;
 let totalCoinsCollected = 0;
 let enemySpawnCount = 0;
 
+// Game state variables
+let gameOver = false;
+let gameOverScreen = false;
+
 let playerObject;
 
 function initializePlayer() {
     playerObject = {
         x: halfWidth,
-        y: canvasHeight - playerRadius, // Start at bottom boundary
+        y: canvasHeight - playerRadius, // Start exactly at bottom boundary
         dx: 0,
         dy: 0,
         radius: 20,
@@ -514,7 +600,7 @@ function initializePlayer() {
 
 
 // Pre-calculate boundary conditions (mathematical optimization)
-const playerRadius = 20; // Match playerObject.radius
+const playerRadius = 0; // Match playerObject.radius
 const maxX = canvasWidth - playerRadius;
 const minX = playerRadius;
 const maxY = canvasHeight - playerRadius;
@@ -541,11 +627,8 @@ function init() {
     }
     
     setCanvasDimensions();
+    loadBackgroundImage();
     initializePlayer();
-    
-    // Single clear operation instead of multiple
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     
     // Draw the ball
     drawBall();
@@ -598,6 +681,33 @@ function drawCoinCounter() {
     ctx.fillText(playerObject.amountOfCoins.toString(), counterX + coinSize + 25, counterY + coinSize/2);
 }
 
+// Draw game over screen
+function drawGameOverScreen() {
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Game over text
+    ctx.fillStyle = '#ff0000';
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('GAME OVER', canvasWidth / 2, canvasHeight / 2 - 100);
+    
+    // Coins collected text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '24px Arial';
+    ctx.fillText(`Coins Collected: ${totalCoinsCollected}`, canvasWidth / 2, canvasHeight / 2 - 40);
+    
+    // Restart instruction
+    ctx.font = '18px Arial';
+    ctx.fillText('Press SPACE to restart', canvasWidth / 2, canvasHeight / 2 + 20);
+    
+    // Final score
+    ctx.font = '20px Arial';
+    ctx.fillText(`Final Score: ${totalCoinsCollected}`, canvasWidth / 2, canvasHeight / 2 + 60);
+}
+
 // Mario-style physics update
 function update() {
     // Apply gravity
@@ -647,20 +757,30 @@ function animate() {
         return;
     }
     
-    // Single clear operation for the entire canvas
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    // Draw background image
+    if (bgImage.complete) {
+        ctx.drawImage(bgImage, 0, 0, canvasWidth, canvasHeight);
+    } else {
+        // Fallback to solid color if image not loaded
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    }
     
-    // Batch update and draw operations
-    update();
-    drawBall();
-    
-    // Update and render all sprites (batch operations)
-    updateAllSprites();
-    renderAllSprites();
-    
-    // Draw UI elements
-    drawCoinCounter();
+    if (gameOverScreen) {
+        // Draw game over screen
+        drawGameOverScreen();
+    } else {
+        // Batch update and draw operations
+        update();
+        drawBall();
+        
+        // Update and render all sprites (batch operations)
+        updateAllSprites();
+        renderAllSprites();
+        
+        // Draw UI elements
+        drawCoinCounter();
+    }
     
     // Continue animation
     animationId = requestAnimationFrame(animate);
@@ -680,9 +800,9 @@ window.addEventListener('load', () => {
     console.log('Creating sprites...');
     
     // Create 3 ground enemies
-    createEnemy(100, playerObject.groundY - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
-    createEnemy(300, playerObject.groundY - 15, -1, 0, 15, '#ff0000', 1, true, 'patrol');
-    createEnemy(500, playerObject.groundY - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(100, canvasHeight - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(300, canvasHeight - 15, -1, 0, 15, '#ff0000', 1, true, 'patrol');
+    createEnemy(500, canvasHeight - 15, 1, 0, 15, '#ff0000', 1, true, 'patrol');
     
     // Create 2 flying enemies
     createEnemy(200, 150, -1, 0, 12, '#ff0000', 1, true, 'flying');
@@ -708,6 +828,14 @@ window.addEventListener('load', () => {
 
 // Mario-style keyboard controls
 document.addEventListener('keydown', (event) => {
+    if (gameOverScreen) {
+        // Handle restart
+        if (event.key === ' ') {
+            restartGame();
+        }
+        return;
+    }
+    
     switch(event.key) {
         case 'ArrowUp':
         case ' ':
